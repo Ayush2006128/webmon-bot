@@ -12,6 +12,9 @@ DISCORD_TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
 API_URL = os.environ.get("API_URL")
 API_KEY = os.environ.get("API_KEY")
 
+# Store user sessions in memory (user_id -> jwt_token)
+user_sessions = {}
+
 if not DISCORD_TOKEN:
     raise ValueError("DISCORD_BOT_TOKEN environment variable not set. Make sure it is set in Doppler.")
 if not API_URL:
@@ -51,9 +54,15 @@ async def model_command(interaction: discord.Interaction, model_name: str = None
     # preventing the interaction from failing due to timeout.
     await interaction.response.defer()
     
+    user_id = str(interaction.user.id)
+    if user_id not in user_sessions:
+        await interaction.followup.send("Please use `/register` then `/login` or just `/login` to authenticate first.")
+        return
+
     headers = {
         "accept": "application/json",
         "X-API-Key": API_KEY,
+        "Authorization": f"Bearer {user_sessions[user_id]}",
         "Content-Type": "application/json"
     }
     
@@ -77,6 +86,88 @@ async def model_command(interaction: discord.Interaction, model_name: str = None
         except Exception as e:
             await interaction.followup.send(f"An error occurred while communicating with the API: {e}")
 
+@bot.tree.command(name="register", description="Register for an account.")
+@app_commands.describe(email="Your email", password="Your password")
+async def register_command(interaction: discord.Interaction, email: str, password: str):
+    await interaction.response.defer(ephemeral=True)
+    
+    headers = {
+        "accept": "application/json",
+        "X-API-Key": API_KEY,
+        "Content-Type": "application/json"
+    }
+    
+    async with httpx.AsyncClient(headers=headers) as client:
+        try:
+            response = await client.post(f"{API_URL}/register", json={"email": email, "password": password})
+            response.raise_for_status()
+            await interaction.followup.send("Registration successful! You can now use `/login`.")
+        except Exception as e:
+            await interaction.followup.send(f"An error occurred during registration: {e}")
+
+@bot.tree.command(name="login", description="Login to your account.")
+@app_commands.describe(email="Your email", password="Your password")
+async def login_command(interaction: discord.Interaction, email: str, password: str):
+    await interaction.response.defer(ephemeral=True)
+    
+    headers = {
+        "accept": "application/json"
+    }
+    
+    async with httpx.AsyncClient(headers=headers) as client:
+        try:
+            # Send as application/x-www-form-urlencoded by using 'data=' parameter
+            # standard FastAPI OAuth2 uses 'username' and 'password' keys
+            response = await client.post(f"{API_URL}/token", data={"username": email, "password": password})
+            
+            # If they expect 'email' key instead of standard 'username', fallback here
+            if response.status_code == 422:
+                response = await client.post(f"{API_URL}/token", data={"email": email, "password": password})
+                
+            response.raise_for_status()
+            data = response.json()
+            
+            # Typical JWT response contains access_token
+            token = data.get("access_token") or data.get("token")
+            if not token and isinstance(data, str):
+                token = data
+                
+            if token:
+                user_sessions[str(interaction.user.id)] = token
+                await interaction.followup.send("Login successful!")
+            else:
+                await interaction.followup.send("Login succeeded but no token was returned in the expected format.")
+        except Exception as e:
+            await interaction.followup.send(f"An error occurred during login: {e}")
+
+@bot.tree.command(name="credits", description="Check your remaining credits and last refill date.")
+async def credits_command(interaction: discord.Interaction):
+    await interaction.response.defer()
+    
+    user_id = str(interaction.user.id)
+    if user_id not in user_sessions:
+        await interaction.followup.send("Please use `/register` then `/login` or just `/login` to authenticate first.")
+        return
+
+    headers = {
+        "accept": "application/json",
+        "X-API-Key": API_KEY,
+        "Authorization": f"Bearer {user_sessions[user_id]}"
+    }
+    
+    async with httpx.AsyncClient(headers=headers) as client:
+        try:
+            response = await client.get(f"{API_URL}/credits")
+            response.raise_for_status()
+            data = response.json()
+            
+            credits = data.get("credits", "Unknown")
+            last_refill_date = data.get("last_refill_date", "Unknown")
+            
+            await interaction.followup.send(f"💰 **Credits Remaining:** {credits}\n📅 **Last Refill Date:** {last_refill_date}")
+        except Exception as e:
+            await interaction.followup.send(f"An error occurred while fetching credits: {e}")
+
 @bot.event
 async def on_message(message: discord.Message):
     # Ignore messages sent by the bot itself to avoid infinite loops
@@ -96,11 +187,17 @@ async def on_message(message: discord.Message):
     
     if not content.strip():
         return
+        
+    user_id = str(message.author.id)
+    if user_id not in user_sessions:
+        await message.channel.send("Please use the `/register` then `/login` or `/login` slash commands to authenticate first.")
+        return
     
     # Match the exact headers from the working curl command
     headers = {
         "accept": "application/json",
         "X-API-Key": API_KEY,
+        "Authorization": f"Bearer {user_sessions[user_id]}",
         "Content-Type": "application/json"
     }
     
