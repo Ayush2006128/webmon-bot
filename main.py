@@ -168,6 +168,61 @@ async def credits_command(interaction: discord.Interaction):
         except Exception as e:
             await interaction.followup.send(f"An error occurred while fetching credits: {e}")
 
+@bot.tree.command(name="buy", description="Buy a credit bundle to top up your account.")
+@app_commands.describe(bundle="The bundle you want to buy (20, 40, or 90)")
+@app_commands.choices(bundle=[
+    app_commands.Choice(name="20 Credits (₹255)", value=20),
+    app_commands.Choice(name="40 Credits (₹449)", value=40),
+    app_commands.Choice(name="90 Credits (₹999)", value=90)
+])
+async def buy_command(interaction: discord.Interaction, bundle: int):
+    # Defer response, ephemeral so checkout link is private
+    await interaction.response.defer(ephemeral=True)
+    
+    user_id = str(interaction.user.id)
+    if user_id not in user_sessions:
+        await interaction.followup.send("Please use `/register` then `/login` or just `/login` to authenticate first.")
+        return
+
+    jwt_token = user_sessions[user_id]
+    headers = {
+        "accept": "application/json",
+        "X-API-Key": API_KEY,
+        "Authorization": f"Bearer {jwt_token}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "tier": f"tier_{bundle}"
+    }
+    
+    async with httpx.AsyncClient(headers=headers) as client:
+        try:
+            response = await client.post(f"{API_URL}/payment/create-order", json=payload)
+            response.raise_for_status()
+            data = response.json()
+            
+            order_id = data.get("order_id")
+            amount_inr = data.get("amount_inr")
+            key_id = data.get("key_id")
+            
+            if not all([order_id, amount_inr, key_id]):
+                await interaction.followup.send("Invalid response from the server while creating order.")
+                return
+                
+            checkout_url = f"https://ayush2006128.github.io/webmon-api/checkout.html?order_id={order_id}&amount={amount_inr}&key_id={key_id}&token={jwt_token}"
+            
+            message = (
+                f"Your order for **{bundle} Credits** has been successfully initiated!\n\n"
+                f"🔗 **[Click here to complete your payment securely]({checkout_url})**\n\n"
+                f"If you have any questions about refunds or pricing, visit our [pricing page](https://ayush2006128.github.io/webmon-api/pricing.html)."
+            )
+            
+            await interaction.followup.send(message)
+            
+        except Exception as e:
+            await interaction.followup.send(f"An error occurred while creating your order: {e}")
+
 @bot.event
 async def on_message(message: discord.Message):
     # Ignore messages sent by the bot itself to avoid infinite loops
@@ -220,12 +275,37 @@ async def on_message(message: discord.Message):
                 except ValueError:
                     reply = response.text
                 
-                # Discord messages have a 2000 character limit. If it's too long, we slice it for now.
-                if len(reply) > 2000:
-                    reply = reply[:1996] + "..."
+                if "insufficient credits" in str(reply).lower():
+                    reply = (
+                        "Sorry I can't process your request. Please buy a credit bundle or comeback after one month. "
+                        "Use `/buy [bundle]` to buy new credits!\n\n"
+                        "**Available Bundles:**\n"
+                        "• **20 Credits** - ₹255\n"
+                        "• **40 Credits** - ₹449\n"
+                        "• **90 Credits** - ₹999\n\n"
+                        "For refund policy and other queries, please visit our [pricing page](https://ayush2006128.github.io/webmon-api/pricing.html)."
+                    )
+                else:
+                    # Discord messages have a 2000 character limit. If it's too long, we slice it for now.
+                    if len(str(reply)) > 2000:
+                        reply = str(reply)[:1996] + "..."
                     
                 await message.channel.send(reply)
                 
+            except httpx.HTTPStatusError as e:
+                if "insufficient credits" in e.response.text.lower():
+                    reply = (
+                        "Sorry I can't process your request. Please buy a credit bundle or comeback after one month. "
+                        "Use `/buy [bundle]` to buy new credits!\n\n"
+                        "**Available Bundles:**\n"
+                        "• **20 Credits** - ₹255\n"
+                        "• **40 Credits** - ₹449\n"
+                        "• **90 Credits** - ₹999\n\n"
+                        "For refund policy and other queries, please visit our [pricing page](https://ayush2006128.github.io/webmon-api/pricing.html)."
+                    )
+                    await message.channel.send(reply)
+                else:
+                    await message.channel.send(f"Error communicating with API: {e}")
             except Exception as e:
                 await message.channel.send(f"Error communicating with API: {e}")
 
