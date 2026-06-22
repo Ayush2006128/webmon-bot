@@ -210,7 +210,7 @@ async def buy_command(interaction: discord.Interaction, bundle: int):
                 await interaction.followup.send("Invalid response from the server while creating order.")
                 return
                 
-            checkout_url = f"https://ayush2006128.github.io/webmon-api/checkout.html?order_id={order_id}&amount={amount_inr}&key_id={key_id}&token={jwt_token}"
+            checkout_url = f"https://webmon-site.onrender.com/checkout.html?order_id={order_id}&amount={amount_inr}&key_id={key_id}&token={jwt_token}"
             
             message = (
                 f"Your order for **{bundle} Credits** has been successfully initiated!\n\n"
