@@ -44,6 +44,10 @@ def setup_message_handler(bot: commands.Bot, settings: Settings, user_sessions: 
                     try:
                         data = response.json()
                         reply = data.get("response") or data.get("reply") or data.get("message") or str(data)
+                        
+                        sources = data.get("sources", [])
+                        if sources:
+                            reply += "\n\n**Sources:**\n" + "\n".join(f"- {s}" for s in sources)
                     except ValueError:
                         reply = response.text
 
