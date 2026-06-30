@@ -18,7 +18,7 @@ def setup_auth_commands(bot: commands.Bot, settings: Settings, user_sessions: di
             "Content-Type": "application/json",
         }
 
-        async with httpx.AsyncClient(headers=headers) as client:
+        async with httpx.AsyncClient(timeout=120.0, headers=headers) as client:
             try:
                 response = await client.post(f"{settings.api_url}/register", json={"email": email, "password": password})
                 response.raise_for_status()
@@ -35,7 +35,7 @@ def setup_auth_commands(bot: commands.Bot, settings: Settings, user_sessions: di
             "accept": "application/json",
         }
 
-        async with httpx.AsyncClient(headers=headers) as client:
+        async with httpx.AsyncClient(timeout=120.0, headers=headers) as client:
             try:
                 response = await client.post(f"{settings.api_url}/token", data={"username": email, "password": password})
 
@@ -72,7 +72,7 @@ def setup_auth_commands(bot: commands.Bot, settings: Settings, user_sessions: di
             "Authorization": f"Bearer {token}",
         }
 
-        async with httpx.AsyncClient(headers=headers) as client:
+        async with httpx.AsyncClient(timeout=120.0, headers=headers) as client:
             try:
                 response = await client.delete(f"{settings.api_url}/me")
                 if response.status_code == 401:
@@ -102,7 +102,7 @@ def setup_auth_commands(bot: commands.Bot, settings: Settings, user_sessions: di
             "Content-Type": "application/json",
         }
 
-        async with httpx.AsyncClient(headers=headers) as client:
+        async with httpx.AsyncClient(timeout=120.0, headers=headers) as client:
             try:
                 response = await client.put(f"{settings.api_url}/password", json={"old_password": old_password, "new_password": new_password})
                 if response.status_code == 401:

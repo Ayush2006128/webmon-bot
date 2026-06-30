@@ -25,7 +25,7 @@ def setup_ai_commands(bot: commands.Bot, settings: Settings, user_sessions: dict
             "Content-Type": "application/json",
         }
 
-        async with httpx.AsyncClient(headers=headers) as client:
+        async with httpx.AsyncClient(timeout=120.0, headers=headers) as client:
             try:
                 if model_name:
                     response = await client.post(f"{settings.api_url}/model", json={"model_name": model_name})

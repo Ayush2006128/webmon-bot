@@ -37,7 +37,7 @@ def setup_message_handler(bot: commands.Bot, settings: Settings, user_sessions: 
 
         async with message.channel.typing():
             try:
-                async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
+                async with httpx.AsyncClient(timeout=120.0, headers=headers) as client:
                     response = await client.post(f"{settings.api_url}/chat", json={"thread_id": thread_id, "message": content})
                     
                     reply = None

@@ -23,7 +23,7 @@ def setup_billing_commands(bot: commands.Bot, settings: Settings, user_sessions:
             "Authorization": f"Bearer {user_sessions[user_id]}",
         }
 
-        async with httpx.AsyncClient(headers=headers) as client:
+        async with httpx.AsyncClient(timeout=120.0, headers=headers) as client:
             try:
                 response = await client.get(f"{settings.api_url}/credits")
                 response.raise_for_status()
@@ -63,7 +63,7 @@ def setup_billing_commands(bot: commands.Bot, settings: Settings, user_sessions:
             "tier": f"tier_{bundle}",
         }
 
-        async with httpx.AsyncClient(headers=headers) as client:
+        async with httpx.AsyncClient(timeout=120.0, headers=headers) as client:
             try:
                 response = await client.post(f"{settings.api_url}/payment/create-order", json=payload)
                 response.raise_for_status()
